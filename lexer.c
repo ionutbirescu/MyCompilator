@@ -8,51 +8,14 @@
 
 enum {
     //CONSTANTS AND IDENTIFIERS
-    ID,
-    CT_INT,
-    CT_REAL,
-    CT_CHAR,
-    CT_STRING,
+    ID, CT_INT, CT_REAL, CT_CHAR, CT_STRING,
 
     //SEPARATORS & OPERATORS
-    AND,
-    SEMICOLON,
-    OR,
-    SPACE,
-    DOT,
-    LPAR,
-    RPAR,
-    DIV,
-    COMMA,
-    LINECOMMENT,
-    END,
-    ASSIGN,
-    EQUALS,
-    LBRACKET,
-    RBRACKET,
-    NOT,
-    NOTEQ,
-    LACC,
-    RACC,
-    LESS,
-    LESSEQ,
-    GREATER,
-    GREATEREQ,
-    ADD,
-    SUB,
-    MUL,
+    AND, SEMICOLON, OR, SPACE, DOT, LPAR, RPAR, DIV, COMMA, LINECOMMENT, END,
+    ASSIGN, EQUALS, LBRACKET, RBRACKET, NOT, NOTEQ, LACC, RACC, LESS, LESSEQ,
+    GREATER, GREATEREQ, ADD, SUB, MUL,
 
-    BREAK,
-    CHAR,
-    DOUBLE,
-    ELSE,
-    FOR,
-    IF,
-    INT,
-    RETURN,
-    STRUCT,
-    VOID,
-    WHILE,
+    BREAK, CHAR, DOUBLE, ELSE, FOR, IF, INT, RETURN, STRUCT, VOID, WHILE,
 };
 
 const char *tokenNames[] = {
@@ -67,7 +30,7 @@ const char *tokenNames[] = {
     [IF]="IF", [INT]="INT", [RETURN]="RETURN", [STRUCT]="STRUCT", [VOID]="VOID", [WHILE]="WHILE"
 };
 
-typedef struct _Token {
+typedef struct Token {
     int code;
 
     union {
@@ -77,7 +40,7 @@ typedef struct _Token {
     };
 
     int line;
-    struct _Token *next;
+    struct Token *next;
 } Token;
 
 Token *tokens = NULL;
@@ -121,7 +84,7 @@ void tkerr(const Token *tk, const char *fmt, ...) {
 }
 
 char *createString(const char *pStart, const char *pCrtCh) {
-    int n = pCrtCh - pStart;
+    int n = (int) (pCrtCh - pStart);
     char *s = (char *) malloc(n + 1);
     if (!s) {
         err("not enough memory");
@@ -489,7 +452,7 @@ int getNextToken() {
                     state = 21;
                 } else {
                     tk = addToken(CT_REAL);
-                    tk->r = atof(createString(pStartCh, pCrtCh));
+                    tk->r = strtod(createString(pStartCh, pCrtCh), NULL);
                     return CT_REAL;
                 }
                 break;
@@ -521,7 +484,7 @@ int getNextToken() {
                 }
                 else {
                     tk = addToken(CT_REAL);
-                    tk->r = atof(createString(pStartCh, pCrtCh));
+                    tk->r = strtod(createString(pStartCh, pCrtCh), NULL);
                     return CT_REAL;
                 }
                 break;
@@ -546,7 +509,7 @@ char *loadFile(const char *fileName) {
         err("cannot open file %s", fileName);
     }
     fseek(fis, 0, SEEK_END);
-    long n = ftell(fis);
+    const long n = ftell(fis);
     fseek(fis, 0, SEEK_SET);
     char *buf = (char *) malloc(n + 1);
     if (!buf) {
@@ -559,7 +522,7 @@ char *loadFile(const char *fileName) {
 }
 
 void showTokens() {
-    Token *tk = tokens;
+    const Token *tk = tokens;
     while (tk) {
         printf("%d", tk->code);
         printf(" %s", tokenNames[tk->code]);
@@ -589,7 +552,7 @@ void done() {
     lastToken = NULL;
 }
 
-int main(int argc, char *argv[])  {
+int main(const int argc, char *argv[])  {
     if (argc < 2) {
         printf("Usage: %s <input_file>\n", argv[0]);
         return 1;
