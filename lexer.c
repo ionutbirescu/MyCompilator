@@ -56,12 +56,15 @@ enum {
 };
 
 const char *tokenNames[] = {
-    "ID", "CT_INT", "CT_REAL", "CT_CHAR", "CT_STRING",
-    "BREAK", "CHAR", "DOUBLE", "ELSE", "FOR", "IF", "INT", "RETURN", "STRUCT", "VOID", "WHILE",
-    "COMMA", "SEMICOLON", "LPAR", "RPAR", "LBRACKET", "RBRACKET", "LACC", "RACC", "END",
-    "ADD", "SUB", "MUL", "DIV", "DOT", "AND", "OR", "NOT",
-    "ASSIGN", "EQUAL", "NOTEQ", "LESS", "LESSEQ", "GREATER", "GREATEREQ",
-    "LINECOMMENT"
+    [ID]="ID", [CT_INT]="CT_INT", [CT_REAL]="CT_REAL", [CT_CHAR]="CT_CHAR", [CT_STRING]="CT_STRING",
+    [AND]="AND", [SEMICOLON]="SEMICOLON", [OR]="OR", [SPACE]="SPACE", [DOT]="DOT",
+    [LPAR]="LPAR", [RPAR]="RPAR", [DIV]="DIV", [COMMA]="COMMA", [LINECOMMENT]="LINECOMMENT",
+    [END]="END", [ASSIGN]="ASSIGN", [EQUALS]="EQUALS", [LBRACKET]="LBRACKET", [RBRACKET]="RBRACKET",
+    [NOT]="NOT", [NOTEQ]="NOTEQ", [LACC]="LACC", [RACC]="RACC",
+    [LESS]="LESS", [LESSEQ]="LESSEQ", [GREATER]="GREATER", [GREATEREQ]="GREATEREQ",
+    [ADD]="ADD", [SUB]="SUB", [MUL]="MUL",
+    [BREAK]="BREAK", [CHAR]="CHAR", [DOUBLE]="DOUBLE", [ELSE]="ELSE", [FOR]="FOR",
+    [IF]="IF", [INT]="INT", [RETURN]="RETURN", [STRUCT]="STRUCT", [VOID]="VOID", [WHILE]="WHILE"
 };
 
 typedef struct _Token {
@@ -169,6 +172,7 @@ int getNextToken() {
                     return COMMA;
                 } else if (ch == ';') {
                     pCrtCh += 1;
+                    addToken(SEMICOLON);
                     return SEMICOLON;
                 } else if (ch == '|') {
                     pCrtCh += 1;
@@ -254,7 +258,7 @@ int getNextToken() {
                 }
                 else {
                     tk = addToken(CT_INT);
-                    tk->i = strtol(pStartCh, NULL, 16);
+                    tk->i = strtol(pStartCh, NULL, 10);
                     return CT_INT;
                 }
                 break;
@@ -516,7 +520,7 @@ int getNextToken() {
                     pCrtCh++;
                 }
                 else {
-                    tk = addToken(CT_INT);
+                    tk = addToken(CT_REAL);
                     tk->r = atof(createString(pStartCh, pCrtCh));
                     return CT_REAL;
                 }
@@ -548,7 +552,7 @@ char *loadFile(const char *fileName) {
     if (!buf) {
         err("not enough memory");
     }
-    fread(buf, 1, n, fis);\
+    fread(buf, 1, n, fis);
     buf[n] = '\0';
     fclose(fis);
     return buf;
