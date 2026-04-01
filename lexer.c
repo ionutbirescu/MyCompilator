@@ -104,29 +104,29 @@ int getNextToken() {
         char ch = *pCrtCh;
         switch (state) {
             case 0:
-                if (ch >= '0' && ch <= '9'){
-                    if (ch == '0') {
+                if (ch >= '0' && ch <= '9'){ // Digit: start number (decimal, octal, or hex)
+                    if (ch == '0') { // Starts with '0': could be octal, hex, or real
                         pStartCh = pCrtCh;
                         pCrtCh += 1;
                         state = 2;
                     }
-                    else {
+                    else { // Starts with 1-9: decimal integer or real
                         pStartCh = pCrtCh;
                         pCrtCh += 1;
                         state = 1;
                     }
-                } else if (ch == '"') {
+                } else if (ch == '"') { // Opening double quote: start string
                     pStartCh = pCrtCh + 1;
                     pCrtCh += 1;
                     state = 3;
-                } else if (ch == '\'') {
+                } else if (ch == '\'') { // Opening single quote: start character constant
                     pCrtCh++;
                     state = 4;
-                } else if (isalpha(ch) || ch == '_') {
+                } else if (isalpha(ch) || ch == '_') { // Letter or underscore: start ID/keyword
                     pStartCh = pCrtCh;
                     pCrtCh += 1;
                     state = 5;
-                } else if (ch == '&') {
+                } else if (ch == '&') { // '&': expect '&&' (AND operator)
                     pCrtCh += 1;
                     state = 6;
                 } else if (ch == ',') {
@@ -207,7 +207,7 @@ int getNextToken() {
                     tkerr(addToken(END), "invalid character: %c", ch);
                 }
                 break;
-            case 1:
+            case 1: // Decimal integer (starts with 1-9)
                 if (ch >= '0' && ch <= '9') {
                     pCrtCh++;
                 }
@@ -225,7 +225,7 @@ int getNextToken() {
                     return CT_INT;
                 }
                 break;
-            case 2:
+            case 2: // Octal/hex/real
                 if (ch=='x' || ch=='X') {
                     pCrtCh++;
                     state = 18;
@@ -244,7 +244,7 @@ int getNextToken() {
                     return CT_INT;
                 }
                 break;
-            case 3:
+            case 3: // string constant
                 if (ch == '"') {
                     tk = addToken(CT_STRING);
                     tk->text = createString(pStartCh, pCrtCh);
@@ -262,7 +262,7 @@ int getNextToken() {
                     pCrtCh += 1;
                 }
                 break;
-            case 4:
+            case 4: // char constant
                 if (ch == '\\') {
                     pCrtCh += 1;
                     ch = *pCrtCh;
@@ -292,14 +292,14 @@ int getNextToken() {
                     state = 13;
                 }
                 break;
-            case 5:
+            case 5: // identifier or keyword
                 if (isalnum(ch) || ch == '_') {
                     pCrtCh += 1;
                 } else {
                     state = 14;
                 }
                 break;
-            case 6:
+            case 6: // got '&', expected second &
                 if (ch == '&') {
                     pCrtCh += 1;
                     addToken(AND);
@@ -308,7 +308,7 @@ int getNextToken() {
                     tkerr(addToken(END), "invalid character after '&' (expected '&&')");
                 }
                 break;
-            case 7:
+            case 7: // got '|', expected second |
                 if (ch == '|') {
                     pCrtCh += 1;
                     addToken(OR);
@@ -317,8 +317,8 @@ int getNextToken() {
                     tkerr(addToken(END), "invalid character after '|' (expected '||')");
                 }
                 break;
-            case 8:
-                if (ch == '/') {
+            case 8: // got '/' check for line comment or div
+                if (ch == '/') { // line comment
                     pCrtCh += 1;
                     state = 15;
                 } else {
@@ -326,7 +326,7 @@ int getNextToken() {
                     return DIV;
                 }
                 break;
-            case 9:
+            case 9: // got '!', expected '=' or NOT
                 if (ch == '=') {
                     pCrtCh += 1;
                     addToken(NOTEQ);
@@ -335,7 +335,7 @@ int getNextToken() {
                     addToken(NOT);
                     return NOT;
                 }
-            case 10:
+            case 10: // got '=', expected EQUALS/ASSIGN
                 if (ch == '=') {
                     pCrtCh += 1;
                     addToken(EQUALS);
@@ -344,7 +344,7 @@ int getNextToken() {
                     addToken(ASSIGN);
                     return ASSIGN;
                 }
-            case 11:
+            case 11: // got '<'
                 if (ch == '=') {
                     pCrtCh += 1;
                     addToken(LESSEQ);
@@ -353,7 +353,7 @@ int getNextToken() {
                     addToken(LESS);
                     return LESS;
                 }
-            case 12:
+            case 12: // got '>'
                 if (ch == '=') {
                     pCrtCh += 1;
                     addToken(GREATEREQ);
@@ -362,7 +362,7 @@ int getNextToken() {
                     addToken(GREATER);
                     return GREATER;
                 }
-            case 13:
+            case 13: // char constant, expected single quote
                 if (ch == '\'') {
                     tk = addToken(CT_CHAR);
                     tk->i = *(pCrtCh - 1);
@@ -372,7 +372,7 @@ int getNextToken() {
                     tkerr(addToken(END), "missing closing quote for char constant");
                 }
                 break;
-            case 14:
+            case 14: // identifier complete, either we have keyword or some ID
                 int newChar = (int) (pCrtCh - pStartCh);
                 // Test keywords
                 if (newChar == 5 && !memcmp(pStartCh, "break", 5)) tk = addToken(BREAK);
@@ -391,7 +391,7 @@ int getNextToken() {
                     tk->text = createString(pStartCh, pCrtCh);
                 }
                 return tk->code;
-            case 15:
+            case 15: // Line comment - we just skip it, we consume until the end of it, then back to state 0
                 if (ch == '\n') {
                     line++;
                     pCrtCh++;
@@ -404,7 +404,7 @@ int getNextToken() {
                     pCrtCh++;
                 }
                 break;
-            case 16:
+            case 16: // got '.' after digits - expected one digit for real num
                 if ( ch>= '0' && ch <= '9' ) {
                     pCrtCh++;
                     state = 20;
@@ -413,7 +413,7 @@ int getNextToken() {
                     tkerr(addToken(END), "digit expected after '.'");
                 }
                 break;
-            case 17:
+            case 17: // got 'e'/'E' after integer digit - exponent part (we can also have +/-)
                 if (ch == '+' || ch == '-') {
                     pCrtCh++;
                     state = 22;
@@ -425,7 +425,7 @@ int getNextToken() {
                     tkerr(addToken(END), "digit expected in exponent or +-");
                 }
                 break;
-            case 18:
+            case 18: // got '0x' - expect at least one hex digit
                 if (isxdigit(ch)) {
                     pCrtCh++;
                     state = 24;
@@ -434,7 +434,7 @@ int getNextToken() {
                     tkerr(addToken(END), "invalid hex number");
                 }
                 break;
-            case 19:
+            case 19: // octal number'
                 if (ch>='0' && ch<='7') {
                     pCrtCh++;
                 } else {
@@ -443,7 +443,7 @@ int getNextToken() {
                     return CT_INT;
                 }
                 break;
-            case 20:
+            case 20: // real fractional part - consume digits, may get 'E'/'e' for exponent
                 if (ch >= '0' && ch <= '9') {
                     pCrtCh++;
                 }
@@ -456,7 +456,7 @@ int getNextToken() {
                     return CT_REAL;
                 }
                 break;
-            case 21:
+            case 21: // get 'e'/'E' after fractional part - exponent ( +/- opt)
                 if (ch == '+' || ch == '-') {
                     pCrtCh++;
                     state = 22;
@@ -469,7 +469,7 @@ int getNextToken() {
                     tkerr(addToken(END), "digit expected in exponent");
                 }
                 break;
-            case 22:
+            case 22: // got '+' or '-' after exponent - expect at least one digit
                 if (ch >= '0' && ch <= '9') {
                     pCrtCh++;
                     state = 23;
@@ -478,7 +478,7 @@ int getNextToken() {
                     tkerr(addToken(END), "digit expected after exponent sign");
                 }
                 break;
-            case 23:
+            case 23: // exponent digits
                 if (ch>='0' && ch<='9') {
                     pCrtCh++;
                 }
@@ -488,7 +488,7 @@ int getNextToken() {
                     return CT_REAL;
                 }
                 break;
-            case 24:
+            case 24: //hex digits
                 if (isxdigit(ch)) {
                     pCrtCh++;
                 } else {
@@ -524,7 +524,6 @@ char *loadFile(const char *fileName) {
 void showTokens() {
     const Token *tk = tokens;
     while (tk) {
-        printf("%d", tk->code);
         printf(" %s", tokenNames[tk->code]);
         if (tk->code == ID || tk->code == CT_STRING) {
             printf(":%s", tk->text);
