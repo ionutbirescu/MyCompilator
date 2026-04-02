@@ -1,0 +1,22 @@
+exprAdd         ::= exprMul exprAddAux
+exprAddAux      ::= (ADD | SUB) exprMul exprAddAux | 3  3 should be epsilon :)
+
+exprOr          ::= exprAnd exprOrAux
+exprOrAux       ::= OR exprAnd exprOrAux | 3
+
+exprEq          ::= exprRel exprEqAux
+exprEqAux       ::= (EQUAL | NOTEQ) exprRel exprEqAux | 3
+
+exprRel         ::= exprAdd exprRelAux
+exprRelAux      ::= (LESS|LESSEQ|GREATER|GREATEREQ) exprAdd exprRelAux | 3
+
+exprAssign      ::= exprOr exprAssignAux
+exprAssignAux   ::= ASSIGN exprAssign | 3
+
+exprMul         ::= exprCast exprMulAux
+exprMulAux      ::= (MUL | DIV) exprCast exprMulAux | 3
+
+exprPostfix     ::= exprPrimary exprPostfixAux
+exprPostfixAux  ::= LBRACKET expr RBRACKET exprPostfixAux
+                    | DOT ID exprPostAux
+                    | 3
