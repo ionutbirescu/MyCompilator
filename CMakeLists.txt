@@ -5,5 +5,8 @@ set(CMAKE_C_STANDARD 17)
 
 add_executable(MyCompilator
         lexer.c
+        parser.c
+        parser.h
+        lexer.h
 )
 

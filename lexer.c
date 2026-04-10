@@ -3,20 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "lexer.h"
+#include "parser.h"
 
 #define SAFEALLOC(var,Type) if((var=(Type*)malloc(sizeof(Type)))==NULL)err("not enough memory");
-
-enum {
-    //CONSTANTS AND IDENTIFIERS
-    ID, CT_INT, CT_REAL, CT_CHAR, CT_STRING,
-
-    //SEPARATORS & OPERATORS
-    AND, SEMICOLON, OR, SPACE, DOT, LPAR, RPAR, DIV, COMMA, LINECOMMENT, END,
-    ASSIGN, EQUALS, LBRACKET, RBRACKET, NOT, NOTEQ, LACC, RACC, LESS, LESSEQ,
-    GREATER, GREATEREQ, ADD, SUB, MUL,
-
-    BREAK, CHAR, DOUBLE, ELSE, FOR, IF, INT, RETURN, STRUCT, VOID, WHILE,
-};
 
 const char *tokenNames[] = {
     [ID]="ID", [CT_INT]="CT_INT", [CT_REAL]="CT_REAL", [CT_CHAR]="CT_CHAR", [CT_STRING]="CT_STRING",
@@ -29,19 +19,6 @@ const char *tokenNames[] = {
     [BREAK]="BREAK", [CHAR]="CHAR", [DOUBLE]="DOUBLE", [ELSE]="ELSE", [FOR]="FOR",
     [IF]="IF", [INT]="INT", [RETURN]="RETURN", [STRUCT]="STRUCT", [VOID]="VOID", [WHILE]="WHILE"
 };
-
-typedef struct Token {
-    int code;
-
-    union {
-        char *text; // for ID, CT_STRING
-        long int i; // for CT_INT, CT_CHAR
-        double r; // for CT_REAL
-    };
-
-    int line;
-    struct Token *next;
-} Token;
 
 Token *tokens = NULL;
 Token *lastToken = NULL;
@@ -579,6 +556,7 @@ int main(const int argc, char *argv[])  {
     }
 
     showTokens();
+    parse(tokens);
     done();
     free(buf);
     return 0;
