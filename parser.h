@@ -8,4 +8,5 @@
 #include "lexer.h"
 
 void parse(Token *tokenList);
+
 #endif //PARSER_H
