@@ -300,7 +300,10 @@ static int stm() {
         return 1;
     }
 
-    expr();
+    if (expr()) {
+        if (!consume(SEMICOLON)) tkerr(crtTk, "missing ; after expression");
+        return 1;
+    }
     if (consume(SEMICOLON)) return 1;
 
     crtTk = startTk;
