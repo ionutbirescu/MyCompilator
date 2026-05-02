@@ -5,6 +5,7 @@
 #include <string.h>
 #include "lexer.h"
 #include "parser.h"
+//#include "symbols.h"
 
 #define SAFEALLOC(var,Type) if((var=(Type*)malloc(sizeof(Type)))==NULL)err("not enough memory");
 

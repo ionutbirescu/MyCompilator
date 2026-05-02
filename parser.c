@@ -4,9 +4,15 @@
 #include<stdio.h>
 #include <stdlib.h>
 #include "parser.h"
+#include "symbols.h"
 
 static Token *crtTk;
 static Token *consumedTk;
+
+static int isRedefinedAtCrtDepth(const char *name) {
+    Symbol *s = findSymbol(&symbols,name);
+    return s!=NULL && s->depth == crtDepth;
+}
 
 static int consume(int code) {
     if (crtTk->code == code) {
@@ -17,9 +23,21 @@ static int consume(int code) {
     return 0;
 }
 
-static int typeBase() {
+static int typeBase(Type *ret) {
     Token *startTk = crtTk;
-    if (consume(INT) || consume(DOUBLE) || consume(CHAR)) {
+    ret->nElements = -1;
+    ret->s = NULL;
+
+    if (consume(INT)) {
+        ret->typeBase = TB_INT;
+        return 1;
+    }
+    if (consume(DOUBLE)) {
+        ret->typeBase = TB_DOUBLE;
+        return 1;
+    }
+    if (consume(CHAR)) {
+        ret->typeBase = TB_CHAR;
         return 1;
     }
     if (consume(STRUCT)) {
@@ -27,6 +45,12 @@ static int typeBase() {
             crtTk = startTk;
             return 0;
         }
+        Token *tkName = consumedTk;
+        Symbol *s = findSymbol(&symbols,tkName->text);
+        if (s==NULL) tkerr(crtTk, "undefined symbol: %s", tkName->text);
+        if (s->cls != CLS_STRUCT) tkerr(crtTk, "%s is not a struct", tkName->text);
+        ret->typeBase = TB_STRUCT;
+        ret->s = s;
         return 1;
     }
     return 0;
@@ -43,15 +67,21 @@ static int exprCast();
 static int exprUnary();
 static int exprPostfix();   static int exprPostfixAux();
 static int exprPrimary();
-static int stm();           static int stmCompound();
+static int stm();           static int stmCompound(int newDomain);
 
 static int expr() {
     return exprAssign();
 }
 
-static int arrayDecl() {
+static int arrayDecl(Type *ret) {
     if (!consume(LBRACKET)) return 0;
-    expr();
+    //expr();
+    if (consume(CT_INT)) {
+        Token *tkSize = consumedTk;
+        ret->nElements = (int)tkSize->i;
+    } else {
+        ret->nElements = 0;
+    }
     if (!consume(RBRACKET)) {
         tkerr(crtTk,"missing ]");
     }
@@ -148,8 +178,9 @@ static int exprMulAux() {
 static int exprCast() {
     Token *startTk = crtTk;
     if (consume(LPAR)) {
-        if (typeBase()) {
-            arrayDecl();
+        Type t;
+        if (typeBase(&t)) {
+            arrayDecl(&t);
             if (!consume(RPAR)) {
                 crtTk = startTk;
                 return exprUnary();
@@ -215,6 +246,15 @@ static int exprPrimary() {
         return 1;
     }
     return 0;
+}
+
+// Helper: register one variable (name + already-resolved type).
+// Handles all three cases: global, function-local, struct member.
+static void addVarLikeSymbol(const char* name, Type t) {
+    if (crtStruct) {
+        if (findSymbol(&crtStruct->members, name) != NULL)
+            tkerr(crtTk, "symbol redefinition: %s", name);
+    }
 }
 
 static int varDef() {

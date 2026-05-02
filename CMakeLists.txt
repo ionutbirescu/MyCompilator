@@ -8,5 +8,7 @@ add_executable(MyCompilator
         parser.c
         parser.h
         lexer.h
+        symbols.h
+        symbols.c
 )
 
