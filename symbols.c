@@ -26,8 +26,8 @@ Symbol *addSymbol(Symbols *symbols, const char* name, int cls) {
         int count = (int)(symbols->after - symbols->begin);
         int n = count * 2;
         if (n==0) n=1;
-        if (symbols->begin == NULL) err("not enough memory");
         symbols->begin = (Symbol**)realloc(symbols->begin,sizeof(Symbol*)*n);
+        if (symbols->begin == NULL) err("not enough memory");
         symbols->end   = symbols->begin + count;
         symbols->after = symbols->begin + n;
     }

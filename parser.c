@@ -75,12 +75,18 @@ static int expr() {
 
 static int arrayDecl(Type *ret) {
     if (!consume(LBRACKET)) return 0;
-    //expr();
-    if (consume(CT_INT)) {
+    Token *startSize = crtTk;
+    if (consume(CT_INT) && crtTk->code == RBRACKET) {
         Token *tkSize = consumedTk;
         ret->nElements = (int)tkSize->i;
     } else {
-        ret->nElements = 0;
+        crtTk = startSize;
+        if (expr()) {
+            ret->nElements = 1;
+        }
+        else {
+            ret->nElements = 0;
+        }
     }
     if (!consume(RBRACKET)) {
         tkerr(crtTk,"missing ]");
@@ -252,25 +258,61 @@ static int exprPrimary() {
 // Handles all three cases: global, function-local, struct member.
 static void addVarLikeSymbol(const char* name, Type t) {
     if (crtStruct) {
+        // struct member — must be unique among the struct's members
         if (findSymbol(&crtStruct->members, name) != NULL)
             tkerr(crtTk, "symbol redefinition: %s", name);
+        Symbol *s = addSymbol(&crtStruct->members, name, CLS_VAR);
+        s->type = t;
+        s->mem = MEM_GLOBAL;
+        return;
+    }
+
+    if (isRedefinedAtCrtDepth(name))
+        tkerr(crtTk, "symbol redefinition: %s", name);
+
+    Symbol *s = addSymbol(&symbols, name, CLS_VAR);
+    s->type = t;
+    if (crtFunc) {
+        s->mem = MEM_LOCAL;
+    }
+    else {
+        s->mem = MEM_GLOBAL;
     }
 }
 
 static int varDef() {
     Token *startTk = crtTk;
-    if (!typeBase()) return 0;
+    Type baseType;
+    if (!typeBase(&baseType)) return 0;
     if (!consume(ID)) {
         crtTk = startTk;
         return 0;
     }
-    arrayDecl();
+    Token *tkName = consumedTk;
+
+    //optional array decl on this variable
+    Type t = baseType;
+    if (arrayDecl(&t)) {
+        if (t.nElements ==0)
+            tkerr(crtTk,"invalid array declaration: vector variable should have a specified dimension");
+    }
+    addVarLikeSymbol(tkName->text, t);
     while (consume(COMMA)) {
         if (!consume(ID)) {
             tkerr(crtTk,"missing identifier after ,");
         }
-        arrayDecl();
+        tkName = consumedTk;
+
+        t=baseType;
+        t.nElements = -1;
+        if (arrayDecl(&t)) {
+            if (t.nElements ==0) {
+                tkerr(crtTk,"invalid array declaration: vector variable should have a specified dimension");
+            }
+        }
+        addVarLikeSymbol(tkName->text, t);
     }
+
     if (!consume(SEMICOLON)) {
         crtTk = startTk;
         return 0;
@@ -281,10 +323,27 @@ static int varDef() {
 static int structDef() {
     Token *startTk = crtTk;
     if (!consume(STRUCT)) return 0;
-    if (!consume(ID) || !consume(LACC)) {
+    if (!consume(ID)) {
         crtTk = startTk;
         return 0;
     }
+    Token *tkName = consumedTk;
+    if (!consume(LACC)) {
+        crtTk = startTk;
+        return 0;
+    }
+
+    if (isRedefinedAtCrtDepth(tkName->text))
+        tkerr(crtTk, "symbol redefinition: %s", tkName->text);
+    Symbol *s = addSymbol(&symbols, tkName->text, CLS_STRUCT);
+    s->type.typeBase = TB_STRUCT;
+    s->type.s = s;
+    s->type.nElements = -1;
+    s->mem = MEM_GLOBAL;
+    initSymbols(&s->members);
+    crtStruct = s;
+    crtDepth++;
+
     while (varDef()) {}
     if (!consume(RACC)) {
         tkerr(crtTk,"missing } in struct def");
@@ -292,12 +351,15 @@ static int structDef() {
     if (!consume(SEMICOLON)) {
         tkerr(crtTk,"missing ; in struct def");
     }
+
+    crtStruct = NULL;
+    crtDepth--;
     return 1;
 }
 
 static int stm() {
     Token *startTk = crtTk;
-    if (stmCompound()) return 1;
+    if (stmCompound(1)) return 1;
     if (consume(IF)) {
         if (!consume(LPAR)) tkerr(crtTk,"missing ( after if");
         if (!expr()) tkerr(crtTk,"invalid expression in if");
@@ -350,9 +412,15 @@ static int stm() {
     return 0;
 }
 
-static int stmCompound() {
+static int stmCompound(int newDomain) {
     if (!consume(LACC)) {
         return 0;
+    }
+
+    Symbol *scopeStart = NULL;
+    if (newDomain) {
+        scopeStart = (symbols.end > symbols.begin)? *(symbols.end - 1): NULL;
+        crtDepth++;
     }
     while (1) {
         if (varDef()){}
@@ -360,35 +428,73 @@ static int stmCompound() {
         else break;
     }
     if (!consume(RACC)) tkerr(crtTk,"missing }");
+
+    if (newDomain) {
+        deleteSymbolsAfter(&symbols, scopeStart);
+        crtDepth--;
+    }
     return 1;
 }
 
 static int fnParam() {
     Token *startTk = crtTk;
-    if (!typeBase()) return 0;
+    Type t;
+    if (!typeBase(&t)) return 0;
     if (!consume(ID)) {
         crtTk = startTk;
         return 0;
     }
-    arrayDecl();
+    Token *tkName = consumedTk;
+    if (arrayDecl(&t)) {
+        t.nElements = 0;
+    }
+
+    if (isRedefinedAtCrtDepth(tkName->text))
+        tkerr(crtTk,"symbol redefinition: %s", tkName->text);
+
+    Symbol *p = addSymbol(&symbols, tkName->text, CLS_VAR);
+    p->type = t;
+    p->mem = MEM_ARG;
+
+    Symbol *pArg = addSymbol(&crtFunc->args, tkName->text, CLS_VAR);
+    pArg->type = t;
+    pArg->mem = MEM_ARG;
     return 1;
 }
 
 static int fnDef() {
     Token *startTk = crtTk;
-    if (!typeBase()) {
+    Type t;
+    if (!typeBase(&t)) {
         if (!consume(VOID)) {
             return 0;
+        }
+        else {
+            t.typeBase = TB_VOID;
+            t.s = NULL;
+            t.nElements = -1;
         }
     }
     if (!consume(ID)) {
         crtTk = startTk;
         return 0;
     }
+    Token *tkName = consumedTk;
     if (!consume(LPAR)) {
         crtTk = startTk;
         return 0;
     }
+
+    if (isRedefinedAtCrtDepth(tkName->text))
+        tkerr(crtTk,"symbol redefinition: %s", tkName->text);
+
+    Symbol *fn = addSymbol(&symbols, tkName->text, CLS_FUNC);
+    fn->type = t;
+    fn->mem = MEM_GLOBAL;
+    initSymbols(&fn->args);
+    crtFunc = fn;
+    crtDepth++;
+
     if (fnParam()) {
         while (consume(COMMA)) {
             if (!fnParam()) {
@@ -399,9 +505,13 @@ static int fnDef() {
     if (!consume(RPAR)) {
         tkerr(crtTk, "missing ) in function definition");
     }
-    if (!stmCompound()) {
+    if (!stmCompound(0)) {
         tkerr(crtTk,"missing function body");
     }
+
+    deleteSymbolsAfter(&symbols, fn);
+    crtDepth--;
+    crtFunc = NULL;
     return 1;
 }
 
@@ -420,6 +530,12 @@ static int unit() { // the entry point for the program, represents an entire Ato
 
 void parse(Token *tokenList) {
     crtTk = tokenList;
+    crtDepth = 0;
+    crtStruct = NULL;
+    crtFunc = NULL;
+    initSymbols(&symbols);
+
     unit();
     printf("Syntax OK\n");
+    showSymbolTable();
 }
