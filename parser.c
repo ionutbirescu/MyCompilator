@@ -56,21 +56,21 @@ static int typeBase(Type *ret) {
     return 0;
 }
 
-static int exprAssign();    static int exprAssignAux();
-static int exprOr();        static int exprOrAux();
-static int exprAnd();       static int exprAndAux();
-static int exprEq();        static int exprEqAux();
-static int exprRel();       static int exprRelAux();
-static int exprAdd();       static int exprAddAux();
-static int exprMul();       static int exprMulAux();
-static int exprCast();
-static int exprUnary();
-static int exprPostfix();   static int exprPostfixAux();
-static int exprPrimary();
+static int exprAssign(Ret *r);    static int exprAssignAux(Ret *r);
+static int exprOr(Ret *r);        static int exprOrAux(Ret *r);
+static int exprAnd(Ret *r);       static int exprAndAux(Ret *r);
+static int exprEq(Ret *r);        static int exprEqAux(Ret *r);
+static int exprRel(Ret *r);       static int exprRelAux(Ret *r);
+static int exprAdd(Ret *r);       static int exprAddAux(Ret *r);
+static int exprMul(Ret *r);       static int exprMulAux(Ret *r);
+static int exprCast(Ret *r);
+static int exprUnary(Ret *r);
+static int exprPostfix(Ret *r);   static int exprPostfixAux(Ret *r);
+static int exprPrimary(Ret *r);
 static int stm();           static int stmCompound(int newDomain);
 
-static int expr() {
-    return exprAssign();
+static int expr(Ret *r) {
+    return exprAssign(r);
 }
 
 static int arrayDecl(Type *ret) {
@@ -94,14 +94,23 @@ static int arrayDecl(Type *ret) {
     return 1;
 }
 
-static int exprAssign() {
-    if (!exprOr()) return 0;
-    return exprAssignAux();
+static int exprAssign(Ret *r) {
+    if (!exprOr(r)) return 0;
+    return exprAssignAux(r);
 }
 
-static int exprAssignAux() {
+static int exprAssignAux(Ret *r) {
     if (consume(ASSIGN)) {
-        if (!exprAssign()) tkerr(crtTk,"invalid expression after =");
+        Ret rSrc;
+        if (!exprAssign(&rSrc)) tkerr(crtTk,"invalid expression after =");
+        if (!r->lval)           tkerr(crtTk,"the assign destination must be a left-value");
+        if (r->ct)              tkerr(crtTk, "the assign destination cannot be constant");
+        if (!canBeScalar(r))    tkerr(crtTk, "the assign source must be scalar");
+        if (!canBeScalar(&rSrc)) tkerr(crtTk, "the assign source must be scalar");
+        if (!convTo(&rSrc.type, &r->type))
+            tkerr(crtTk, "the assign source cannot be converted to destination");
+        r->lval = 0;
+        r->ct = 1;
     }
     return 1;
 }
@@ -229,25 +238,60 @@ static int exprPostfixAux() {
 /* exprPrimary: ID ( LPAR ( expr ( COMMA expr )* )? RPAR )?
              | CT_INT | CT_REAL | CT_CHAR | CT_STRING
              | LPAR expr RPAR */
-static int exprPrimary() {
+static int exprPrimary(Ret *r) {
     if (consume(ID)) {
+        Token *tkName = consumedTk;
+        Symbol *s = findSymbol(&symbols, tkName->text);
+        if (!s) tkerr(crtTk, "undefined id: %s", tkName->text);
+
         if (consume(LPAR)) {
-            if (expr()) {
+            // function call
+            if (s->cls != CLS_FUNC && s->cls != CLS_EXTFUNC) {
+                tkerr(crtTk, "only a function can be called");
+            }
+            Ret rArg;
+            int paramCount = (int)(s->args.end - s->args.begin);
+            int argIdx = 0;
+
+            if (expr(&rArg)) {
+                if (argIdx >= paramCount) tkerr(crtTk, "too many arguments in function call");
+                if (!convTo(&rArg.type, &s->args.begin[argIdx]->type))
+                    tkerr(crtTk, "cannot convert argument type to parameter type");
+                argIdx++;
                 while (consume(COMMA)) {
-                    if (!expr()) tkerr(crtTk,"invalid expression after ,");
+                    if (!expr(&rArg)) tkerr(crtTk,"invalid expression after ,");
+                    if (argIdx >= paramCount) tkerr(crtTk, "too many arguments in function call");
+                    if (!convTo(&rArg.type, &s->args.begin[argIdx]->type))
+                        tkerr(crtTk, "cannot convert argument type to parameter type");
+                    argIdx++;
                 }
             }
+            if (argIdx != paramCount) tkerr(crtTk, "too few arguments in function call");
             if (!consume(RPAR)) tkerr(crtTk,"missing ) in function call");
+            *r = (Ret){s->type, 0, 1};
         }
         return 1;
     }
 
-    if (consume(CT_INT) || consume(CT_REAL) || consume(CT_CHAR) || consume(CT_STRING)) {
+    if (consume(CT_INT)) {
+        *r = (Ret){{TB_INT, NULL, -1}, 0, 1};
+        return 1;
+    }
+    if (consume(CT_REAL)) {
+        *r = (Ret){{TB_DOUBLE, NULL, -1}, 0, 1};
+        return 1;
+    }
+    if (consume(CT_CHAR)) {
+        *r = (Ret){{TB_CHAR, NULL, -1}, 0, 1};
+        return 1;
+    }
+    if (consume(CT_STRING)) {
+        *r = (Ret){{TB_CHAR, NULL, 0}, 0, 1};
         return 1;
     }
 
     if (consume(LPAR)) {
-        if (!expr()) tkerr(crtTk,"invalid expression after (");
+        if (!expr(r)) tkerr(crtTk,"invalid expression after (");
         if (!consume(RPAR)) tkerr(crtTk,"missing )");
         return 1;
     }

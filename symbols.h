@@ -57,6 +57,18 @@ struct _Symbol {
     };
 };
 
+typedef struct {
+    Type type;
+    int lval;
+    int ct;
+} Ret;
+
+// type analysis helpers
+Type getArithType(Type *s1, Type *s2);
+int convTo(Type *src, Type *dst);
+int canBeScalar(Ret *r);
+void addExtFuncs();
+
 extern Symbols symbols;
 extern int crtDepth;
 extern Symbol *crtStruct;
