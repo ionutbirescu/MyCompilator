@@ -227,7 +227,6 @@ void addExtFuncs() {
 }
 
 void showSymbolTable(void) {
-    printf("==== Symbol Table ====\n");
+    printf(" Symbol Table \n");
     showSymbols(&symbols, 0);
-    printf("======================\n");
 }

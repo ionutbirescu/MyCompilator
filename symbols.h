@@ -84,4 +84,11 @@ Symbol *addFuncArg(Symbol *func, const char* name, Type type); // adds a CLS_VAR
 
 void showSymbolTable(void);
 
+// type analysis helpers
+Type createType(int typeBase, int nElements);
+Type getArithType(Type *s1, Type *s2);
+int arithTypeTo(Type *s1, Type *s2, Type *dst);
+int convTo(Type *src, Type *dst);
+int canBeScalar(Ret *r);
+void addExtFuncs();
 #endif //MYCOMPILATOR_SYMBOLS_H

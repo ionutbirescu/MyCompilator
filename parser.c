@@ -81,7 +81,8 @@ static int arrayDecl(Type *ret) {
         ret->nElements = (int)tkSize->i;
     } else {
         crtTk = startSize;
-        if (expr()) {
+        Ret rSize;
+        if (expr(&rSize)) {
             ret->nElements = 1;
         }
         else {
@@ -105,7 +106,7 @@ static int exprAssignAux(Ret *r) {
         if (!exprAssign(&rSrc)) tkerr(crtTk,"invalid expression after =");
         if (!r->lval)           tkerr(crtTk,"the assign destination must be a left-value");
         if (r->ct)              tkerr(crtTk, "the assign destination cannot be constant");
-        if (!canBeScalar(r))    tkerr(crtTk, "the assign source must be scalar");
+        if (!canBeScalar(r))    tkerr(crtTk, "the assign destination must be scalar");
         if (!canBeScalar(&rSrc)) tkerr(crtTk, "the assign source must be scalar");
         if (!convTo(&rSrc.type, &r->type))
             tkerr(crtTk, "the assign source cannot be converted to destination");
@@ -115,82 +116,112 @@ static int exprAssignAux(Ret *r) {
     return 1;
 }
 
-static int exprOr() {
-    if (!exprAnd()) return 0;
-    return exprOrAux();
+static int exprOr(Ret *r) {
+    if (!exprAnd(r)) return 0;
+    return exprOrAux(r);
 }
 
-static int exprOrAux() {
+static int exprOrAux(Ret *r){
     if (consume(OR)) {
-        if (!exprAnd()) tkerr(crtTk,"invalid expression after ||");
-        return exprOrAux();
+        Ret right;
+        if (!exprAnd(&right)) tkerr(crtTk,"invalid expression after ||");
+        Type tDst;
+        if (!arithTypeTo(&r->type, &right.type, &tDst))
+            tkerr(crtTk,"invalid operand types for ||");
+        *r = (Ret){{TB_INT, NULL, -1}, 0, 1};
+        return exprOrAux(r);
     }
     return 1;
 }
 
-static int exprAnd() {
-    if (!exprEq()) return 0;
-    return exprAndAux();
+static int exprAnd(Ret *r) {
+    if (!exprEq(r)) return 0;
+    return exprAndAux(r);
 }
 
-static int exprAndAux() {
+static int exprAndAux(Ret *r) {
     if (consume(AND)) {
-        if (!exprEq()) tkerr(crtTk,"invalid expression after &&");
-        return exprAndAux();
+        Ret right;
+        if (!exprEq(&right)) tkerr(crtTk,"invalid expression after &&");
+        Type tDst;
+        if (!arithTypeTo(&r->type, &right.type, &tDst))
+            tkerr(crtTk,"invalid operand types for &&");
+        *r = (Ret){{TB_INT, NULL, -1}, 0, 1};
+        return exprAndAux(r);
     }
     return 1;
 }
 
-static int exprEq() {
-    if (!exprRel()) return 0; return exprEqAux();
+static int exprEq(Ret *r) {
+    if (!exprRel(r)) return 0; return exprEqAux(r);
 }
 
-static int exprEqAux() {
+static int exprEqAux(Ret *r) {
     if (consume(EQUALS) || consume(NOTEQ)) {
-        if (!exprRel()) tkerr(crtTk, "invalid expression after == or !=");
-        return exprEqAux();
+        Ret right;
+        if (!exprRel(&right)) tkerr(crtTk,"invalid expression after == or !=");
+        Type tDst;
+        if (!arithTypeTo(&r->type, &right.type, &tDst))
+            tkerr(crtTk,"invalid operand types for == or !=");
+        *r = (Ret){{TB_INT, NULL, -1}, 0, 1};
+        return exprEqAux(r);
     }
     return 1;
 }
 
-static int exprRel() {
-    if (!exprAdd()) return 0; return exprRelAux();
+static int exprRel(Ret* r) {
+    if (!exprAdd(r)) return 0; return exprRelAux(r);
 }
 
-static int exprRelAux() {
+static int exprRelAux(Ret *r) {
     if (consume(LESS) || consume(LESSEQ) || consume(GREATER) || consume(GREATEREQ)) {
-        if (!exprAdd()) tkerr(crtTk, "invalid expression after relation operator");
-        return exprRelAux();
+        Ret right;
+        if (!exprAdd(&right)) tkerr(crtTk,"invalid expression after relational operator");
+        Type tDst;
+        if (!arithTypeTo(&r->type, &right.type, &tDst))
+            tkerr(crtTk,"invalid operand types for <, <=, >, >=");
+        *r = (Ret){{TB_INT, NULL, -1}, 0, 1};
+        return exprRelAux(r);
     }
     return 1;
 }
 
-static int exprAdd() {
-    if (!exprMul()) return 0; return exprAddAux();
+static int exprAdd(Ret *r) {
+    if (!exprMul(r)) return 0; return exprAddAux(r);
 }
 
-static int exprAddAux() {
+static int exprAddAux(Ret *r) {
     if (consume(ADD) || consume(SUB)) {
-        if (!exprMul()) tkerr(crtTk, "invalid expression after + or - operator");
-        return exprAddAux();
+        Ret right;
+        if (!exprMul(&right)) tkerr(crtTk,"invalid expression after + or -");
+        Type tDst;
+        if (!arithTypeTo(&r->type, &right.type, &tDst))
+            tkerr(crtTk,"invalid operand types for + or -");
+        *r = (Ret){tDst, 0, 1};
+        return exprAddAux(r);
     }
     return 1;
 }
 
-static int exprMul() {
-    if (!exprCast()) return 0;
-    return exprMulAux();
+static int exprMul(Ret *r) {
+    if (!exprCast(r)) return 0;
+    return exprMulAux(r);
 }
 
-static int exprMulAux() {
+static int exprMulAux(Ret *r) {
     if (consume(MUL) || consume(DIV)) {
-        if (!exprCast()) tkerr(crtTk, "invalid expression after multiplication operator");
-        return exprMulAux();
+        Ret right;
+        if (!exprCast(&right)) tkerr(crtTk,"invalid expression after * or /");
+        Type tDst;
+        if (!arithTypeTo(&r->type, &right.type, &tDst))
+            tkerr(crtTk,"invalid operand types for * or /");
+        *r = (Ret){tDst, 0, 1};
+        return exprMulAux(r);
     }
     return 1;
 }
 
-static int exprCast() {
+static int exprCast(Ret *r) {
     Token *startTk = crtTk;
     if (consume(LPAR)) {
         Type t;
@@ -198,39 +229,62 @@ static int exprCast() {
             arrayDecl(&t);
             if (!consume(RPAR)) {
                 crtTk = startTk;
-                return exprUnary();
+                return exprUnary(r);
             }
-            if (!exprCast()) {
-                tkerr(crtTk,"invalid expression after cast");
-            }
+            Ret op;
+            if (!exprCast(&op)) tkerr(crtTk,"invalid expression after cast");
+            if (t.typeBase == TB_STRUCT)       tkerr(crtTk,"cannot convert to a struct type");
+            if (op.type.typeBase == TB_STRUCT)  tkerr(crtTk,"cannot convert a struct");
+            if (op.type.nElements >= 0 && t.nElements < 0)
+                tkerr(crtTk,"an array can be converted only to another array");
+            if (op.type.nElements < 0 && t.nElements >= 0)
+                tkerr(crtTk,"a scalar can be converted only to another scalar");
+            *r = (Ret){t, 0, 1};
             return 1;
         }
         crtTk = startTk;
     }
-    return exprUnary();
+    return exprUnary(r);
 }
 
-static int exprUnary() {
+static int exprUnary(Ret *r) {
     if (consume(SUB) || consume(NOT)) {
-        if (!exprUnary()) tkerr(crtTk,"invalid expression after unary operator");
+        if (!exprUnary(r)) tkerr(crtTk,"invalid expression after unary operator");
+        if (!canBeScalar(r)) tkerr(crtTk,"unary - or ! must have a scalar operand");
+        r->lval = 0;
+        r->ct   = 1;
         return 1;
     }
-    return exprPostfix();
+    return exprPostfix(r);
 }
 
-static int exprPostfix() {
-    if (!exprPrimary()) return 0; return exprPostfixAux();
+static int exprPostfix(Ret *r) {
+    if (!exprPrimary(r)) return 0;
+    return exprPostfixAux(r);
 }
 
-static int exprPostfixAux() {
+static int exprPostfixAux(Ret *r) {
     if (consume(LBRACKET)) {
-        if (!expr()) tkerr(crtTk,"invalid expression in [ ]");
+        Ret idx;
+        if (!expr(&idx)) tkerr(crtTk,"invalid expression in [ ]");
         if (!consume(RBRACKET)) tkerr(crtTk,"missing ]");
-        return exprPostfixAux();
+        if (r->type.nElements < 0) tkerr(crtTk,"only an array can be indexed");
+        Type tInt = {TB_INT, NULL, -1};
+        if (!convTo(&idx.type, &tInt)) tkerr(crtTk,"index is not convertible to int");
+        r->type.nElements = -1;
+        r->lval = 1;
+        r->ct   = 0;
+        return exprPostfixAux(r);
     }
     if (consume(DOT)) {
         if (!consume(ID)) tkerr(crtTk,"missing identifier after .");
-        return exprPostfixAux();
+        Token *tkName = consumedTk;
+        if (r->type.typeBase != TB_STRUCT)
+            tkerr(crtTk,"a field can only be selected from a struct");
+        Symbol *s = findSymbol(&r->type.s->members, tkName->text);
+        if (!s) tkerr(crtTk,"the struct does not have a field named %s", tkName->text);
+        *r = (Ret){s->type, 1, 0};
+        return exprPostfixAux(r);
     }
     return 1;
 }
@@ -246,9 +300,8 @@ static int exprPrimary(Ret *r) {
 
         if (consume(LPAR)) {
             // function call
-            if (s->cls != CLS_FUNC && s->cls != CLS_EXTFUNC) {
+            if (s->cls != CLS_FUNC && s->cls != CLS_EXTFUNC)
                 tkerr(crtTk, "only a function can be called");
-            }
             Ret rArg;
             int paramCount = (int)(s->args.end - s->args.begin);
             int argIdx = 0;
@@ -269,6 +322,11 @@ static int exprPrimary(Ret *r) {
             if (argIdx != paramCount) tkerr(crtTk, "too few arguments in function call");
             if (!consume(RPAR)) tkerr(crtTk,"missing ) in function call");
             *r = (Ret){s->type, 0, 1};
+        } else {
+            // plain variable
+            if (s->cls == CLS_FUNC || s->cls == CLS_EXTFUNC)
+                tkerr(crtTk, "a function can only be called");
+            *r = (Ret){s->type, 1, 0};
         }
         return 1;
     }
@@ -406,7 +464,9 @@ static int stm() {
     if (stmCompound(1)) return 1;
     if (consume(IF)) {
         if (!consume(LPAR)) tkerr(crtTk,"missing ( after if");
-        if (!expr()) tkerr(crtTk,"invalid expression in if");
+        Ret rCond;
+        if (!expr(&rCond)) tkerr(crtTk,"invalid expression in if");
+        if (!canBeScalar(&rCond)) tkerr(crtTk,"the if condition must be a scalar value");
         if (!consume(RPAR)) tkerr(crtTk,"missing ) in if");
         if (!stm()) tkerr(crtTk,"missing if statement");
         if (consume(ELSE)) {
@@ -417,7 +477,9 @@ static int stm() {
 
     if (consume(WHILE)) {
         if (!consume(LPAR)) tkerr(crtTk,"missing ( after while");
-        if (!expr()) tkerr(crtTk,"invalid expression in while");
+        Ret rCond;
+        if (!expr(&rCond)) tkerr(crtTk,"invalid expression in while");
+        if (!canBeScalar(&rCond)) tkerr(crtTk,"the while condition must be a scalar value");
         if (!consume(RPAR)) tkerr(crtTk,"missing ) in while");
         if (!stm()) tkerr(crtTk,"missing while statement");
         return 1;
@@ -425,11 +487,14 @@ static int stm() {
 
     if (consume(FOR)) {
         if (!consume(LPAR)) tkerr(crtTk,"missing ( after for");
-        expr();
+        Ret rInit, rCond, rStep;
+        expr(&rInit);
         if (!consume(SEMICOLON)) tkerr(crtTk,"missing ; in for");
-        expr();
-        if (!consume(SEMICOLON)) tkerr(crtTk, "missing ; in for");
-        expr();
+        if (expr(&rCond)) {
+            if (!canBeScalar(&rCond)) tkerr(crtTk,"the for condition must be a scalar value");
+        }
+        if (!consume(SEMICOLON)) tkerr(crtTk,"missing ; in for");
+        expr(&rStep);
         if (!consume(RPAR)) tkerr(crtTk,"missing ) in for");
         if (!stm()) tkerr(crtTk,"missing for statement");
         return 1;
@@ -441,13 +506,25 @@ static int stm() {
     }
 
     if (consume(RETURN)) {
-        expr();
+        Ret rExpr;
+        if (expr(&rExpr)) {
+            if (crtFunc->type.typeBase == TB_VOID)
+                tkerr(crtTk,"a void function cannot return a value");
+            if (!canBeScalar(&rExpr))
+                tkerr(crtTk,"the return value must be a scalar value");
+            if (!convTo(&rExpr.type, &crtFunc->type))
+                tkerr(crtTk,"cannot convert return expression to function return type");
+        } else {
+            if (crtFunc->type.typeBase != TB_VOID)
+                tkerr(crtTk,"a non-void function must return a value");
+        }
         if (!consume(SEMICOLON)) tkerr(crtTk,"missing ; after return");
         return 1;
     }
 
-    if (expr()) {
-        if (!consume(SEMICOLON)) tkerr(crtTk, "missing ; after expression");
+    Ret rExpr;
+    if (expr(&rExpr)) {
+        if (!consume(SEMICOLON)) tkerr(crtTk,"missing ; after expression");
         return 1;
     }
     if (consume(SEMICOLON)) return 1;
@@ -578,7 +655,7 @@ void parse(Token *tokenList) {
     crtStruct = NULL;
     crtFunc = NULL;
     initSymbols(&symbols);
-
+    addExtFuncs();
     unit();
     printf("Syntax OK\n");
     showSymbolTable();
